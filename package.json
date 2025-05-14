@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:mainnet": "npx hardhat run scripts/deploy-mainnet.ts --network baseMainnet"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +15,7 @@
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.13",
     "@openzeppelin/contracts": "^5.3.0",
+    "@types/node": "^20.11.5",
     "dotenv": "^16.5.0",
     "hardhat": "^2.23.0"
   }

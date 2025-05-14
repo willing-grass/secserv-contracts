@@ -24,7 +24,8 @@ cp .env.example .env
 
 3. Fill in your environment variables in `.env`:
 - `PRIVATE_KEY`: Your wallet's private key for deployment
-- `BASE_GOERLI_RPC_URL`: Base Goerli RPC URL (default provided)
+- `BASE_SEPOLIA_RPC_URL`: Base Sepolia RPC URL (default provided)
+- `BASE_MAINNET_RPC_URL`: Base Mainnet RPC URL (default provided)
 - `BASESCAN_API_KEY`: Your Basescan API key for contract verification
 
 ## Testing
@@ -34,14 +35,19 @@ Run the test suite:
 npx hardhat test
 ```
 
-## Deployment to Base Goerli
+## Deployment
 
-1. Make sure you have enough ETH on Base Goerli for deployment
-2. Update the USDC address and system fee address in `scripts/deploy.ts`
-3. Deploy the contract:
+### Deploy to Base Sepolia (Testnet)
 ```bash
-npx hardhat run scripts/deploy.ts --network baseGoerli
+npm run deploy:sepolia
 ```
+
+### Deploy to Base Mainnet
+```bash
+npm run deploy:mainnet
+```
+
+Note: The Base mainnet deployment uses the actual USDC token contract (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) rather than deploying a mock token.
 
 ## Contract Usage
 

@@ -22,10 +22,18 @@ const config: HardhatUserConfig = {
       gasPrice: "auto",
       gas: "auto",
     },
+    baseMainnet: {
+      url: process.env.BASE_MAINNET_RPC_URL || "https://mainnet.base.org",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 8453,
+      gasPrice: "auto",
+      gas: "auto",
+    },
   },
   etherscan: {
     apiKey: {
       baseSepolia: process.env.BASESCAN_API_KEY || "",
+      baseMainnet: process.env.BASESCAN_API_KEY || "",
     },
     customChains: [
       {
@@ -34,6 +42,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api-sepolia.basescan.org/api",
           browserURL: "https://sepolia.basescan.org"
+        }
+      },
+      {
+        network: "baseMainnet",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
         }
       }
     ]
