@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { run } from "hardhat";
 
 async function main() {
@@ -19,16 +19,20 @@ async function main() {
   // The fee percentage (1000 basis points = 10%)
   const feePercentage = 1000;
 
-  // Deploy MessageMarketplace
-  console.log("Deploying MessageMarketplace...");
-  const messageMarketplace = await MessageMarketplace.deploy(
+  // Deploy MessageMarketplace as upgradable proxy
+  console.log("Deploying MessageMarketplace as upgradable proxy...");
+  const messageMarketplace = await upgrades.deployProxy(MessageMarketplace, [
     usdcAddress,
     systemFeeAddress,
     feePercentage
-  );
+  ], { initializer: 'initialize' });
   await messageMarketplace.waitForDeployment();
   const messageMarketplaceAddress = await messageMarketplace.getAddress();
   console.log("MessageMarketplace deployed to:", messageMarketplaceAddress);
+
+  // Get the implementation address for verification
+  const implementationAddress = await upgrades.erc1967.getImplementationAddress(messageMarketplaceAddress);
+  console.log("Implementation address:", implementationAddress);
 
   // Verify contract on Base Mainnet
   console.log("Waiting for block confirmations...");
@@ -36,14 +40,22 @@ async function main() {
 
   console.log("Verifying contract...");
   try {
+    // Verify the implementation contract
     await run("verify:verify", {
-      address: messageMarketplaceAddress,
-      constructorArguments: [usdcAddress, systemFeeAddress, feePercentage],
+      address: implementationAddress,
+      constructorArguments: [],
     });
-    console.log("MessageMarketplace verified successfully");
+    console.log("MessageMarketplace implementation verified successfully");
   } catch (error) {
     console.log("Error verifying contract:", error);
   }
+
+  console.log("\nDeployment Summary:");
+  console.log("USDC Address:", usdcAddress);
+  console.log("MessageMarketplace Proxy:", messageMarketplaceAddress);
+  console.log("MessageMarketplace Implementation:", implementationAddress);
+  console.log("System Fee Address:", systemFeeAddress);
+  console.log("Fee Percentage: 10% (1000 basis points)");
 }
 
 // We recommend this pattern to be able to use async/await everywhere
