@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { Contract } from "ethers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("MessageMarketplace", function () {
-  let messageMarketplace: Contract;
-  let usdc: Contract;
+  let messageMarketplace: any;
+  let usdc: any;
   let owner: HardhatEthersSigner;
   let creator: HardhatEthersSigner;
   let buyer: HardhatEthersSigner;
@@ -22,13 +22,13 @@ describe("MessageMarketplace", function () {
     const mockUSDC = await MockUSDC.deploy("USD Coin", "USDC", 6);
     await mockUSDC.waitForDeployment();
 
-    // Deploy MessageMarketplace
+    // Deploy MessageMarketplace as upgradable proxy
     const MessageMarketplace = await ethers.getContractFactory("MessageMarketplace");
-    const marketplace = await MessageMarketplace.deploy(
+    const marketplace = await upgrades.deployProxy(MessageMarketplace, [
       await mockUSDC.getAddress(),
       await systemFeeAddress.getAddress(),
       1000 // 10% fee (1000 basis points)
-    );
+    ], { initializer: 'initialize' });
     await marketplace.waitForDeployment();
 
     return { marketplace, mockUSDC };
@@ -51,55 +51,99 @@ describe("MessageMarketplace", function () {
   });
 
   describe("Message Creation", function () {
-    it("Should create a message successfully", async function () {
+    it("Should create a message successfully without expiration", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6); // 10 USDC
+      const expireAt = 0n; // No expiration
 
-      await expect(messageMarketplace.connect(creator).createMessage(messageId, price))
+      await expect(messageMarketplace.connect(creator).createMessage(messageId, price, expireAt))
         .to.emit(messageMarketplace, "MessageCreated")
-        .withArgs(messageId, creatorAddress, price);
+        .withArgs(messageId, creatorAddress, price, expireAt);
 
       const message = await messageMarketplace.getMessage(messageId);
       expect(message.creator).to.equal(creatorAddress);
       expect(message.price).to.equal(price);
-      expect(message.exists).to.be.true;
+      expect(message.expireAt).to.equal(expireAt);
+    });
+
+    it("Should create a message successfully with expiration", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      
+      // Get current block timestamp and add 1 hour
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expireAt = BigInt(currentBlock!.timestamp + 3600); // 1 hour from now
+
+      await expect(messageMarketplace.connect(creator).createMessage(messageId, price, expireAt))
+        .to.emit(messageMarketplace, "MessageCreated")
+        .withArgs(messageId, creatorAddress, price, expireAt);
+
+      const message = await messageMarketplace.getMessage(messageId);
+      expect(message.creator).to.equal(creatorAddress);
+      expect(message.price).to.equal(price);
+      expect(message.expireAt).to.equal(expireAt);
     });
 
     it("Should not allow creating a message with the same ID", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       await expect(
-        messageMarketplace.connect(creator).createMessage(messageId, price)
+        messageMarketplace.connect(creator).createMessage(messageId, price, expireAt)
       ).to.be.revertedWith("Message already exists");
     });
 
     it("Should not allow creating a message with zero price", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = 0;
+      const expireAt = 0n;
 
       await expect(
-        messageMarketplace.connect(creator).createMessage(messageId, price)
+        messageMarketplace.connect(creator).createMessage(messageId, price, expireAt)
       ).to.be.revertedWith("Price must be greater than 0");
+    });
+
+    it("Should not allow creating a message with past expiration", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      
+      // Get current block timestamp and subtract 1 hour
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expireAt = BigInt(currentBlock!.timestamp - 3600); // 1 hour ago
+
+      await expect(
+        messageMarketplace.connect(creator).createMessage(messageId, price, expireAt)
+      ).to.be.revertedWith("Expiration must be in the future");
     });
   });
 
   describe("Message Purchase", function () {
-    it("Should purchase a message successfully", async function () {
+    it("Should purchase a message successfully without expiration", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       const initialBuyerBalance = await usdc.balanceOf(buyerAddress);
       const initialCreatorBalance = await usdc.balanceOf(creatorAddress);
       const initialSystemBalance = await usdc.balanceOf(systemFeeAddressString);
 
-      await expect(messageMarketplace.connect(buyer).purchaseMessage(messageId))
+      const purchaseTx = await messageMarketplace.connect(buyer).purchaseMessage(messageId);
+      const receipt = await purchaseTx.wait();
+
+      // Get the timestamp from the event
+      const event = receipt?.logs.find(
+        (log: any) => log.fragment?.name === "MessagePurchased"
+      );
+      const purchaseTimestamp = event?.args[3];
+
+      await expect(purchaseTx)
         .to.emit(messageMarketplace, "MessagePurchased")
-        .withArgs(messageId, buyerAddress, price);
+        .withArgs(messageId, buyerAddress, price, purchaseTimestamp);
 
       const finalBuyerBalance = await usdc.balanceOf(buyerAddress);
       const finalCreatorBalance = await usdc.balanceOf(creatorAddress);
@@ -108,26 +152,92 @@ describe("MessageMarketplace", function () {
       expect(finalBuyerBalance).to.equal(initialBuyerBalance - price);
       expect(finalCreatorBalance).to.equal(initialCreatorBalance + (price * 90n) / 100n);
       expect(finalSystemBalance).to.equal(initialSystemBalance + (price * 10n) / 100n);
+
+      // Check purchase details
+      const purchaseDetails = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+      expect(purchaseDetails.timestamp).to.equal(purchaseTimestamp);
+      expect(purchaseDetails.price).to.equal(price);
     });
 
-    it("Should allow multiple purchases of the same message", async function () {
+    it("Should purchase a message successfully before expiration", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      
+      // Get current block timestamp and add 1 hour
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expireAt = BigInt(currentBlock!.timestamp + 3600); // 1 hour from now
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      const initialBuyerBalance = await usdc.balanceOf(buyerAddress);
+      const initialCreatorBalance = await usdc.balanceOf(creatorAddress);
+      const initialSystemBalance = await usdc.balanceOf(systemFeeAddressString);
+
+      const purchaseTx = await messageMarketplace.connect(buyer).purchaseMessage(messageId);
+      const receipt = await purchaseTx.wait();
+
+      // Get the timestamp from the event
+      const event = receipt?.logs.find(
+        (log: any) => log.fragment?.name === "MessagePurchased"
+      );
+      const purchaseTimestamp = event?.args[3];
+
+      await expect(purchaseTx)
+        .to.emit(messageMarketplace, "MessagePurchased")
+        .withArgs(messageId, buyerAddress, price, purchaseTimestamp);
+
+      const finalBuyerBalance = await usdc.balanceOf(buyerAddress);
+      const finalCreatorBalance = await usdc.balanceOf(creatorAddress);
+      const finalSystemBalance = await usdc.balanceOf(systemFeeAddressString);
+
+      expect(finalBuyerBalance).to.equal(initialBuyerBalance - price);
+      expect(finalCreatorBalance).to.equal(initialCreatorBalance + (price * 90n) / 100n);
+      expect(finalSystemBalance).to.equal(initialSystemBalance + (price * 10n) / 100n);
+
+      // Check purchase details
+      const purchaseDetails = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+      expect(purchaseDetails.timestamp).to.equal(purchaseTimestamp);
+      expect(purchaseDetails.price).to.equal(price);
+    });
+
+    it("Should not allow purchasing an expired message", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      
+      // Get current block timestamp and add 3 second to ensure it's in the future
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expireAt = BigInt(currentBlock!.timestamp + 3);
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Wait for expiration
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      await expect(
+        messageMarketplace.connect(buyer).purchaseMessage(messageId)
+      ).to.be.revertedWith("Message has expired");
+    });
+
+    it("Should not allow duplicate purchases by the same buyer", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
       
       // First purchase
       await messageMarketplace.connect(buyer).purchaseMessage(messageId);
       
-      // Second purchase by the same buyer
-      await expect(messageMarketplace.connect(buyer).purchaseMessage(messageId))
-        .to.emit(messageMarketplace, "MessagePurchased")
-        .withArgs(messageId, buyerAddress, price);
+      // Second purchase by the same buyer should fail
+      await expect(
+        messageMarketplace.connect(buyer).purchaseMessage(messageId)
+      ).to.be.revertedWith("Message already purchased by this buyer");
     });
 
-    it("Should track message purchases by specific buyers", async function () {
+    it("Should allow multiple purchases by different buyers", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
       const [_, __, ___, buyer2] = await ethers.getSigners();
       const buyer2Address = await buyer2.getAddress();
 
@@ -136,7 +246,7 @@ describe("MessageMarketplace", function () {
       await usdc.connect(buyer2).approve(await messageMarketplace.getAddress(), ethers.parseUnits("1000", 6));
 
       // Create message
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
       
       // Initial state check
       const initialBuyer1Purchase = await messageMarketplace.hasPurchasedMessage(messageId, buyerAddress);
@@ -164,13 +274,23 @@ describe("MessageMarketplace", function () {
 
       expect(finalBuyer1Purchase).to.be.true;
       expect(finalBuyer2Purchase).to.be.true;
+
+      // Check purchase details for both buyers
+      const purchaseDetails1 = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+      const purchaseDetails2 = await messageMarketplace.getPurchaseDetails(messageId, buyer2Address);
+
+      expect(purchaseDetails1.timestamp).to.be.gt(0);
+      expect(purchaseDetails1.price).to.equal(price);
+      expect(purchaseDetails2.timestamp).to.be.gt(0);
+      expect(purchaseDetails2.price).to.equal(price);
     });
 
     it("Should not allow creator to purchase their own message", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       await expect(
         messageMarketplace.connect(creator).purchaseMessage(messageId)
@@ -178,12 +298,125 @@ describe("MessageMarketplace", function () {
     });
   });
 
+  describe("Expiration Functionality", function () {
+    it("Should correctly identify expired messages", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("expiring message"));
+      const price = ethers.parseUnits("10", 6);
+      
+      // Get current block timestamp and add 3 seconds to ensure it's in the future
+      const currentBlock = await ethers.provider.getBlock("latest");
+      const expireAt = BigInt(currentBlock!.timestamp + 3);
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Check before expiration
+      let isExpired = await messageMarketplace.isMessageExpired(messageId);
+      expect(isExpired).to.be.false;
+
+      // Advance EVM time by 6 seconds and mine a block
+      await ethers.provider.send("evm_increaseTime", [6]);
+      await ethers.provider.send("evm_mine");
+
+      // Check after expiration
+      isExpired = await messageMarketplace.isMessageExpired(messageId);
+      expect(isExpired).to.be.true;
+    });
+
+    it("Should correctly identify non-expiring messages", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("non-expiring message"));
+      const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n; // No expiration
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Check expiration status
+      const isExpired = await messageMarketplace.isMessageExpired(messageId);
+      expect(isExpired).to.be.false;
+    });
+
+    it("Should return false for non-existent messages", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("non-existent message"));
+
+      const isExpired = await messageMarketplace.isMessageExpired(messageId);
+      expect(isExpired).to.be.false;
+    });
+
+    it("Should allow purchasing non-expiring messages after time passes", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("non-expiring message"));
+      const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n; // No expiration
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Wait some time
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Should still be able to purchase
+      await expect(messageMarketplace.connect(buyer).purchaseMessage(messageId))
+        .to.emit(messageMarketplace, "MessagePurchased");
+    });
+  });
+
+  describe("Purchase Details", function () {
+    it("Should return correct purchase details", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Get EVM block timestamp before purchase
+      const beforeBlock = await ethers.provider.getBlock("latest");
+      const beforePurchase = beforeBlock!.timestamp;
+
+      // Purchase message
+      const purchaseTx = await messageMarketplace.connect(buyer).purchaseMessage(messageId);
+      await purchaseTx.wait();
+
+      // Get EVM block timestamp after purchase
+      const afterBlock = await ethers.provider.getBlock("latest");
+      const afterPurchase = afterBlock!.timestamp;
+
+      // Get purchase details
+      const purchaseDetails = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+
+      expect(purchaseDetails.timestamp).to.be.gte(beforePurchase);
+      expect(purchaseDetails.timestamp).to.be.lte(afterPurchase);
+      expect(purchaseDetails.price).to.equal(price);
+    });
+
+    it("Should return zero values for non-purchased messages", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
+      const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
+
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
+
+      // Get purchase details for non-purchased message
+      const purchaseDetails = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+
+      expect(purchaseDetails.timestamp).to.equal(0);
+      expect(purchaseDetails.price).to.equal(0);
+    });
+
+    it("Should return zero values for non-existent messages", async function () {
+      const messageId = ethers.keccak256(ethers.toUtf8Bytes("non-existent message"));
+
+      // Get purchase details for non-existent message
+      const purchaseDetails = await messageMarketplace.getPurchaseDetails(messageId, buyerAddress);
+
+      expect(purchaseDetails.timestamp).to.equal(0);
+      expect(purchaseDetails.price).to.equal(0);
+    });
+  });
+
   describe("Fee Distribution", function () {
     it("Should correctly distribute fees for different price points", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("100", 6); // 100 USDC
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       const initialBuyerBalance = await usdc.balanceOf(buyerAddress);
       const initialCreatorBalance = await usdc.balanceOf(creatorAddress);
@@ -208,8 +441,9 @@ describe("MessageMarketplace", function () {
     it("Should handle small amounts correctly", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("1", 6); // 1 USDC
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       const initialBuyerBalance = await usdc.balanceOf(buyerAddress);
       const initialCreatorBalance = await usdc.balanceOf(creatorAddress);
@@ -269,8 +503,9 @@ describe("MessageMarketplace", function () {
     it("Should not allow purchasing message without USDC approval", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
       
       // Revoke approval
       await usdc.connect(buyer).approve(await messageMarketplace.getAddress(), 0);
@@ -283,8 +518,9 @@ describe("MessageMarketplace", function () {
     it("Should not allow purchasing message with insufficient USDC balance", async function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10000", 6); // 10000 USDC
+      const expireAt = 0n;
 
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       // Approve the contract to spend tokens
       await usdc.connect(buyer).approve(await messageMarketplace.getAddress(), price);
@@ -412,9 +648,10 @@ describe("MessageMarketplace", function () {
 
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message 5%"));
       const price = ethers.parseUnits("100", 6); // 100 USDC
+      const expireAt = 0n;
 
       // Create message first
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       // Get initial balances
       const initialCreatorBalance = await usdc.balanceOf(creator.address);
@@ -451,9 +688,10 @@ describe("MessageMarketplace", function () {
 
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message 7.5%"));
       const price = ethers.parseUnits("100", 6); // 100 USDC
+      const expireAt = 0n;
 
       // Create message first
-      await messageMarketplace.connect(creator).createMessage(messageId, price);
+      await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
       // Get initial balances
       const initialCreatorBalance = await usdc.balanceOf(creator.address);
