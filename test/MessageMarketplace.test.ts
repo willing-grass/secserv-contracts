@@ -204,14 +204,15 @@ describe("MessageMarketplace", function () {
       const messageId = ethers.keccak256(ethers.toUtf8Bytes("test message"));
       const price = ethers.parseUnits("10", 6);
       
-      // Get current block timestamp and add 3 second to ensure it's in the future
+      // Get current block timestamp and add 3 seconds to ensure it's in the future
       const currentBlock = await ethers.provider.getBlock("latest");
       const expireAt = BigInt(currentBlock!.timestamp + 3);
 
       await messageMarketplace.connect(creator).createMessage(messageId, price, expireAt);
 
-      // Wait for expiration
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Advance EVM time by 4 seconds and mine a block
+      await ethers.provider.send("evm_increaseTime", [4]);
+      await ethers.provider.send("evm_mine");
 
       await expect(
         messageMarketplace.connect(buyer).purchaseMessage(messageId)
