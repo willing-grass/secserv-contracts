@@ -1,22 +1,23 @@
 {
   "name": "secserv-contracts",
   "version": "1.0.0",
-  "description": "",
+  "description": "Upgradeable Message Marketplace Contract",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia",
-    "deploy:mainnet": "npx hardhat run scripts/deploy-mainnet.ts --network baseMainnet"
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:base-sepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:base-mainnet": "hardhat run scripts/deploy-mainnet.ts --network baseMainnet",
+    "test:upgrade:base-sepolia": "hardhat run scripts/test-upgrade-base.ts --network baseSepolia"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "@nomicfoundation/hardhat-verify": "^2.0.13",
-    "@openzeppelin/contracts": "^5.3.0",
-    "@types/node": "^20.11.5",
+    "@nomicfoundation/hardhat-toolbox": "^6.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.3.0",
+    "@openzeppelin/hardhat-upgrades": "^3.9.0",
+    "@types/node": "^24.0.4",
     "dotenv": "^16.5.0",
-    "hardhat": "^2.23.0"
+    "hardhat": "^2.25.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }
