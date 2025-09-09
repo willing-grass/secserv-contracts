@@ -12,15 +12,39 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using ECDSA for bytes32;
 
-    // Signer management
-    mapping(address => bool) public signers;
-    
-    // Fee configuration
+    // V2 Storage Layout (must be maintained for compatibility)
+    ERC20Upgradeable public usdc;
     address public systemFeeAddress;
     uint256 public feePercentage;
     uint256 public constant BASIS_POINTS = 10000;
 
-    // Events
+    struct Message {
+        address creator;
+        uint256 price;
+        uint256 expireAt;
+    }
+
+    struct Purchase {
+        uint256 timestamp;
+        uint256 price;
+    }
+
+    mapping(bytes32 => Message) public messages;
+    mapping(bytes32 => mapping(address => Purchase)) public messagePurchases;
+
+    struct FiatPurchase {
+        uint256 timestamp;
+        uint256 price;
+        bytes32 purchaseHash;
+        bytes32 backendValidationHash;
+    }
+
+    mapping(bytes32 => FiatPurchase) public fiatPurchases;
+
+    // V3 New Storage (added after existing storage)
+    mapping(address => bool) public signers;
+
+    // V3 Events
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
     event MessagePurchased(
@@ -34,6 +58,10 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
     event FeePercentageUpdated(uint256 oldFee, uint256 newFee);
     event SystemFeeAddressUpdated(address oldAddress, address newAddress);
 
+    // V2 Events (maintained for compatibility)
+    event MessageCreated(bytes32 indexed messageId, address indexed seller, uint256 price, uint256 expireAt);
+    event MessagePurchasedByFiat(bytes32 indexed messageId, address indexed buyer, uint256 amount, uint256 timestamp);
+
     // Modifiers
     modifier onlySigner() {
         require(signers[msg.sender], "Not authorized signer");
@@ -46,9 +74,11 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
     }
 
     function initialize(
+        address _usdcAddress,
         address _systemFeeAddress,
         uint256 _feePercentage
     ) public initializer {
+        require(_usdcAddress != address(0), "Invalid USDC address");
         require(_systemFeeAddress != address(0), "Invalid system fee address");
         require(_feePercentage <= BASIS_POINTS, "Fee percentage too high");
 
@@ -56,6 +86,7 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
         __ReentrancyGuard_init();
         __UUPSUpgradeable_init();
 
+        usdc = ERC20Upgradeable(_usdcAddress);
         systemFeeAddress = _systemFeeAddress;
         feePercentage = _feePercentage;
     }
@@ -192,20 +223,47 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
         IERC20(token).transfer(msg.sender, amount);
     }
 
+    // V2 View Functions (maintained for compatibility)
+    function hasPurchasedMessage(bytes32 messageId, address buyer) external view returns (bool) {
+        return messagePurchases[messageId][buyer].timestamp > 0;
+    }
+
+    function hasPurchasedMessageByFiat(bytes32 purchaseHash) external view returns (bool) {
+        return fiatPurchases[purchaseHash].timestamp > 0;
+    }
+
+    function getFiatPurchaseDetails(bytes32 purchaseHash) external view returns (FiatPurchase memory) {
+        return fiatPurchases[purchaseHash];
+    }
+
+    function getMessage(bytes32 messageId) external view returns (Message memory) {
+        return messages[messageId];
+    }
+
     /**
      * @dev Disable the old message creation and purchase flow
      * These functions are overridden to prevent usage of the old flow
      */
-    function createMessage(bytes32, uint256, uint256) external pure {
-        revert("V3: Old message creation flow disabled. Use off-chain flow.");
+    function createMessage(
+        bytes32 messageId,
+        uint256 price,
+        uint256 expireAt
+    ) external pure {
+        revert("V2 function disabled - use off-chain flow");
     }
 
-    function purchaseMessage(bytes32) external pure {
-        revert("V3: Old message purchase flow disabled. Use off-chain flow.");
+    function purchaseMessage(bytes32 messageId) external pure {
+        revert("V2 function disabled - use off-chain flow");
     }
 
-    function purchaseMessageByFiat(bytes32, bytes32, bytes32) external pure {
-        revert("V3: Old fiat purchase flow disabled. Use off-chain flow.");
+    function purchaseMessageByFiat(
+        bytes32 messageId,
+        address buyer,
+        uint256 amount,
+        bytes32 web2UserId,
+        bytes32 validationHash
+    ) external pure {
+        revert("V2 function disabled - use off-chain flow");
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
