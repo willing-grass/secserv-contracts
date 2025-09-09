@@ -1,0 +1,12 @@
+{
+  "network": "Ethereum Sepolia",
+  "chainId": 11155111,
+  "proxyAddress": "0xA4FEc013091aFeF73Be855a8ae42E497f74e3c53",
+  "implementationAddress": "0x8ca18C41a57C406b948334f25B1A2c5266Df85a3",
+  "usdcAddress": "0x42D8BCf255125BB186459AF66bB74EEF8b8cC391",
+  "systemFeeAddress": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "feePercentage": 500,
+  "deployer": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "deployerBalance": "16432892125898514",
+  "timestamp": "2025-07-25T08:11:30.968Z"
+}

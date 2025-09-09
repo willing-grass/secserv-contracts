@@ -1,0 +1,12 @@
+{
+  "network": "BSC Testnet",
+  "chainId": 97,
+  "proxyAddress": "0x8ca18C41a57C406b948334f25B1A2c5266Df85a3",
+  "implementationAddress": "0x8A7d4bbe0194C75356Ffdc44D1BFb2402cFa60c2",
+  "usdcAddress": "0x4C07B79C3D8954A51Efc342EdA5D08f8b1f9ceC4",
+  "systemFeeAddress": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "feePercentage": 500,
+  "deployer": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "deployerBalance": "499776046860000000",
+  "timestamp": "2025-07-25T11:40:15.195Z"
+}

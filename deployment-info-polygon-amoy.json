@@ -1,0 +1,12 @@
+{
+  "network": "Polygon Amoy",
+  "chainId": 80002,
+  "proxyAddress": "0x553cA4414A35b0C8cb644c477D02709E5BAe1927",
+  "implementationAddress": "0x8A7d4bbe0194C75356Ffdc44D1BFb2402cFa60c2",
+  "usdcAddress": "0x834bBE71a0a5C91A4Aff10Df400A963D95AD4775",
+  "systemFeeAddress": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "feePercentage": 500,
+  "deployer": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "deployerBalance": "81014010838591758",
+  "timestamp": "2025-07-25T11:38:16.332Z"
+}
