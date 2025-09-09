@@ -1,0 +1,16 @@
+{
+  "network": "Base Sepolia",
+  "chainId": 84532,
+  "proxyAddress": "0x0DD6017dE44f82a54553941A85A66C87b085E0d1",
+  "implementationAddress": "0x8ca18C41a57C406b948334f25B1A2c5266Df85a3",
+  "usdcAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "systemFeeAddress": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "feePercentage": 500,
+  "deployer": "0xeEf4566F8eBC599F84854e14456cBE7BA9EB1471",
+  "deployerBalance": "0",
+  "timestamp": "2025-01-27T00:00:00.000Z",
+  "rpcUrl": "https://sepolia.base.org",
+  "blockExplorerUrl": "https://sepolia.basescan.org",
+  "commodity": "TT",
+  "wertNetworkName": "base_sepolia"
+}
