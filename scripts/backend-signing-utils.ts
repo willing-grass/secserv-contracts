@@ -13,6 +13,15 @@ export interface PurchaseParams {
   deadline: number;
 }
 
+export interface FiatPurchaseParams {
+  messageId: string;
+  creator: string;
+  amount: bigint | string;
+  web2UserId: string;
+  validationHash: string;
+  deadline: number;
+}
+
 /**
  * Sign an ERC-20 token purchase
  * @param params Purchase parameters including token address
@@ -29,6 +38,29 @@ export async function signPurchase(
   const dataHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(
     ["bytes32", "address", "address", "uint256", "uint256"],
     [params.messageId, params.seller, params.token, params.amount, params.deadline]
+  ));
+  
+  // Sign with EIP-191 (Ethereum Signed Message)
+  const signature = await signer.signMessage(ethers.getBytes(dataHash));
+  return signature;
+}
+
+/**
+ * Sign a fiat purchase
+ * @param params Fiat purchase parameters
+ * @param privateKey Backend signer private key
+ * @returns EIP-191 signature
+ */
+export async function signFiatPurchase(
+  params: FiatPurchaseParams,
+  privateKey: string
+): Promise<string> {
+  const signer = new ethers.Wallet(privateKey);
+  
+  // Build hash exactly as contract does (including creator)
+  const dataHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(
+    ["bytes32", "address", "uint256", "bytes32", "bytes32", "uint256"],
+    [params.messageId, params.creator, params.amount, params.web2UserId, params.validationHash, params.deadline]
   ));
   
   // Sign with EIP-191 (Ethereum Signed Message)
@@ -81,6 +113,22 @@ export function validatePurchaseParams(params: PurchaseParams): boolean {
 }
 
 /**
+ * Validate fiat purchase parameters
+ * @param params Fiat purchase parameters
+ * @returns True if valid
+ */
+export function validateFiatPurchaseParams(params: FiatPurchaseParams): boolean {
+  return (
+    params.messageId !== "" &&
+    ethers.isAddress(params.creator) &&
+    BigInt(params.amount) > 0 &&
+    params.web2UserId !== "" &&
+    params.validationHash !== "" &&
+    params.deadline > Math.floor(Date.now() / 1000)
+  );
+}
+
+/**
  * Example usage and testing
  */
 export async function exampleUsage() {
@@ -95,7 +143,7 @@ export async function exampleUsage() {
   const deadline = createDeadline(900); // 15 minutes
   
   // Sign ERC-20 purchase
-  const signature = signPurchase({
+  const signature = await signPurchase({
     messageId,
     seller,
     token: tokenAddress,
@@ -105,14 +153,29 @@ export async function exampleUsage() {
   
   console.log("ERC-20 purchase signature:", signature);
   
+  // Sign fiat purchase
+  const fiatParams = {
+    messageId,
+    creator: "0x742d35Cc6634C0532925a3b8D0C4C4C4C4C4C4C4C",
+    amount,
+    web2UserId: ethers.keccak256(ethers.toUtf8Bytes("user-123")),
+    validationHash: ethers.keccak256(ethers.toUtf8Bytes("validation-data")),
+    deadline
+  };
+  
+  const fiatSignature = await signFiatPurchase(fiatParams, privateKey);
+  console.log("Fiat purchase signature:", fiatSignature);
+  
   // Validate parameters
-  console.log("Parameters valid:", validatePurchaseParams({
+  console.log("ERC-20 parameters valid:", validatePurchaseParams({
     messageId,
     seller,
     token: tokenAddress,
     amount,
     deadline
   }));
+  
+  console.log("Fiat parameters valid:", validateFiatPurchaseParams(fiatParams));
 }
 
 // Run example if this file is executed directly
