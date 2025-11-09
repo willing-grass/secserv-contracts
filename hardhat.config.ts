@@ -31,7 +31,7 @@ const config: HardhatUserConfig = {
       gas: "auto",
     },
     sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/demo",
+      url: "https://sepolia.yopta.net/db86e0b527e331d16f0f51b38917766d22d1a26d",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY].filter(Boolean) : [],
       chainId: 11155111,
       gasPrice: "auto",

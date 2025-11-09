@@ -2,11 +2,13 @@
   "network": "Polygon Mainnet",
   "chainId": 137,
   "proxyAddress": "0x3Dfb0f9e802528Dfff91bb6F893FC4FfB0362DBd",
-  "implementationAddress": "0x26c90DBE7A46e4662A9539e1e73319e602D12689",
-  "usdcAddress": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+  "implementationAddress": "0x2eF71160fa8848389d998908D144CB3939b93e92",
+  "previousImplementation": "0xC993CBb5EC989Cc34eB50044592eB604aA30531C",
+  "usdcAddress": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
   "systemFeeAddress": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
-  "feePercentage": 1000,
+  "feePercentage": "1000",
   "deployer": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
-  "deployerBalance": "18108379147233034514",
-  "timestamp": "2025-08-22T08:52:26.644Z"
+  "deployerBalance": "2468207464315306689",
+  "timestamp": "2025-10-13T08:11:05.617Z",
+  "upgrade": true
 }

@@ -2,11 +2,15 @@
   "network": "Ethereum Mainnet",
   "chainId": 1,
   "proxyAddress": "0x3Dfb0f9e802528Dfff91bb6F893FC4FfB0362DBd",
-  "implementationAddress": "0x26c90DBE7A46e4662A9539e1e73319e602D12689",
+  "implementationAddress": "0xb85F5058cc735bC604FB84eeF8D284c72Aa1b896",
+  "previousImplementation": "0x26c90DBE7A46e4662A9539e1e73319e602D12689",
   "usdcAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
   "systemFeeAddress": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
-  "feePercentage": 1000,
+  "feePercentage": "1000",
   "deployer": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
   "deployerBalance": "9120219781704733",
-  "timestamp": "2025-08-22T09:06:27.342Z"
+  "timestamp": "2025-01-27T10:50:00.000Z",
+  "upgrade": true,
+  "verified": true,
+  "verificationUrl": "https://etherscan.io/address/0xb85F5058cc735bC604FB84eeF8D284c72Aa1b896#code"
 }

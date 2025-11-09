@@ -1,0 +1,15 @@
+{
+  "network": "Base Mainnet",
+  "chainId": 8453,
+  "proxyAddress": "0x3Dfb0f9e802528Dfff91bb6F893FC4FfB0362DBd",
+  "implementationAddress": "0x553cA4414A35b0C8cb644c477D02709E5BAe1927",
+  "usdcAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "systemFeeAddress": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
+  "feePercentage": "1000",
+  "deployer": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
+  "deployerBalance": "97675485815733",
+  "timestamp": "2025-01-27T11:00:00.000Z",
+  "verified": true,
+  "verificationUrl": "https://basescan.org/address/0x553cA4414A35b0C8cb644c477D02709E5BAe1927#code",
+  "status": "V3 - Ready"
+}

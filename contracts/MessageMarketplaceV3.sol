@@ -43,6 +43,7 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
 
     // V3 New Storage (added after existing storage)
     mapping(address => bool) public signers;
+    mapping(bytes32 => mapping(address => bool)) public offchainPurchases; // messageHash => buyer => purchased
 
     // V3 Events
     event SignerAdded(address indexed signer);
@@ -57,10 +58,11 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
     );
     event FeePercentageUpdated(uint256 oldFee, uint256 newFee);
     event SystemFeeAddressUpdated(address oldAddress, address newAddress);
+    event USDCAddressUpdated(address oldAddress, address newAddress);
 
     // V2 Events (maintained for compatibility)
     event MessageCreated(bytes32 indexed messageId, address indexed seller, uint256 price, uint256 expireAt);
-    event MessagePurchasedByFiat(bytes32 indexed messageId, address indexed buyer, uint256 amount, uint256 timestamp);
+    event MessagePurchasedByFiat(bytes32 indexed messageId, address indexed buyer, uint256 amount, uint256 timestamp, bytes32 backendValidationHash);
 
     // Modifiers
     modifier onlySigner() {
@@ -170,6 +172,9 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
             require(tokenContract.transfer(seller, sellerAmount), "Seller transfer failed");
         }
 
+        // Mark as purchased in offchain purchases mapping using message hash
+        offchainPurchases[keccak256(abi.encodePacked(messageId, seller, token, amount))][msg.sender] = true;
+
         emit MessagePurchased(messageId, msg.sender, seller, amount, token, block.chainid);
     }
 
@@ -196,12 +201,71 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
     }
 
     /**
+     * @dev Update the USDC token address
+     * @param _newUSDCAddress The new USDC token address
+     */
+    function updateUSDCAddress(address _newUSDCAddress) external onlyOwner {
+        require(_newUSDCAddress != address(0), "Invalid USDC address");
+        address oldAddress = address(usdc);
+        usdc = ERC20Upgradeable(_newUSDCAddress);
+        emit USDCAddressUpdated(oldAddress, _newUSDCAddress);
+    }
+
+    /**
      * @dev Check if an address is an authorized signer
      * @param signer The address to check
      * @return True if the address is an authorized signer
      */
     function isSigner(address signer) external view returns (bool) {
         return signers[signer];
+    }
+
+    /**
+     * @dev Check if a message has been purchased offchain by a specific buyer
+     * @param messageId The message ID to check
+     * @param seller The seller address
+     * @param token The token address
+     * @param amount The amount
+     * @param buyer The buyer address to check
+     * @return True if the message has been purchased by the buyer
+     */
+    function hasPurchasedOffchain(
+        bytes32 messageId, 
+        address seller, 
+        address token, 
+        uint256 amount, 
+        address buyer
+    ) external view returns (bool) {
+        return offchainPurchases[keccak256(abi.encodePacked(messageId, seller, token, amount))][buyer];
+    }
+
+    /**
+     * @dev Check if a fiat purchase exists using V3 parameters
+     * @param messageId The message ID
+     * @param creator The creator address
+     * @param amount The amount paid
+     * @param web2UserId The web2 user identifier
+     * @param validationHash The validation hash from backend
+     * @param timestamp The timestamp when the purchase was made
+     * @return True if the fiat purchase exists
+     */
+    function hasPurchasedByFiatV3(
+        bytes32 messageId,
+        address creator,
+        uint256 amount,
+        bytes32 web2UserId,
+        bytes32 validationHash,
+        uint256 timestamp
+    ) external view returns (bool) {
+        bytes32 purchaseHash = keccak256(abi.encode(
+            messageId,
+            creator,
+            amount,
+            web2UserId,
+            validationHash,
+            timestamp
+        ));
+        return fiatPurchases[purchaseHash].timestamp > 0;
     }
 
     /**
@@ -256,14 +320,84 @@ contract MessageMarketplaceV3 is Initializable, OwnableUpgradeable, ReentrancyGu
         revert("V2 function disabled - use off-chain flow");
     }
 
+    /**
+     * @dev Purchase message by fiat with off-chain signature (V3 implementation)
+     * @param messageId The unique message identifier
+     * @param creator The address of the message creator/seller
+     * @param amount The amount paid in fiat
+     * @param web2UserId The web2 user identifier
+     * @param validationHash The validation hash from backend
+     * @param deadline The deadline for the signature validity
+     * @param signature The EIP-191 signature from backend
+     */
     function purchaseMessageByFiat(
         bytes32 messageId,
-        address buyer,
+        address creator,
         uint256 amount,
         bytes32 web2UserId,
-        bytes32 validationHash
-    ) external pure {
-        revert("V2 function disabled - use off-chain flow");
+        bytes32 validationHash,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant {
+        require(block.timestamp <= deadline, "Signature expired");
+        require(creator != address(0), "Invalid creator address");
+        require(amount > 0, "Amount must be greater than 0");
+        require(messageId != bytes32(0), "Invalid message ID");
+
+        // Rebuild hash exactly as backend did (including creator)
+        bytes32 dataHash = keccak256(abi.encode(
+            messageId,
+            creator,
+            amount,
+            web2UserId,
+            validationHash,
+            deadline
+        ));
+
+        // Convert to EIP-191 signed message hash
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", dataHash));
+        address signer = ECDSA.recover(ethHash, signature);
+        require(signers[signer], "Invalid signature");
+
+        // Calculate fees (same as V2 logic)
+        uint256 feeAmount = (amount * feePercentage) / BASIS_POINTS;
+        uint256 creatorAmount;
+        unchecked {
+            creatorAmount = amount - feeAmount;
+        }
+
+        // Transfer USDC from buyer to contract (same as V2)
+        require(usdc.transferFrom(msg.sender, address(this), amount), "USDC transfer failed");
+
+        // Transfer fee to system address
+        if (feeAmount > 0) {
+            require(usdc.transfer(systemFeeAddress, feeAmount), "Fee transfer failed");
+        }
+
+        // Transfer remaining amount to creator
+        if (creatorAmount > 0) {
+            require(usdc.transfer(creator, creatorAmount), "Creator transfer failed");
+        }
+
+        // Create purchase hash for tracking
+        bytes32 purchaseHash = keccak256(abi.encode(
+            messageId,
+            creator,
+            amount,
+            web2UserId,
+            validationHash,
+            block.timestamp
+        ));
+
+        // Store fiat purchase details
+        fiatPurchases[purchaseHash] = FiatPurchase({
+            timestamp: block.timestamp,
+            price: amount,
+            purchaseHash: purchaseHash,
+            backendValidationHash: validationHash
+        });
+
+        emit MessagePurchasedByFiat(messageId, msg.sender, amount, block.timestamp, validationHash);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}

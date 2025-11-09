@@ -2,11 +2,13 @@
   "network": "BSC Mainnet",
   "chainId": 56,
   "proxyAddress": "0xb85F5058cc735bC604FB84eeF8D284c72Aa1b896",
-  "implementationAddress": "0x34FA3149f508eECBdB638eE7AEAB0ff65FE6a427",
-  "usdcAddress": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+  "implementationAddress": "0x71BC68247F9f389783dc4f5C2637384d6619a607",
+  "previousImplementation": "0xf695df391d48839e0994691394b24cD2aB5C64aa",
+  "usdcAddress": "0x55d398326f99059fF775485246999027B3197955",
   "systemFeeAddress": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
-  "feePercentage": 1000,
+  "feePercentage": "1000",
   "deployer": "0xea965B879F8dF5535A45168ED10b2d08C89137e5",
-  "deployerBalance": "1923383792303827",
-  "timestamp": "2025-08-22T08:35:54.566Z"
+  "deployerBalance": "675697255198862",
+  "timestamp": "2025-10-13T15:09:33.079Z",
+  "upgrade": true
 }
